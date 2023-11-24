@@ -1,0 +1,100 @@
+#!/bin/bash
+
+set -x
+
+# base server information
+export CONAN_SERVER_CONFIG_FILE=${CONAN_SERVER_CONFIG_FILE:="${CONAN_SERVER_HOME}/server.conf"}
+
+# safety
+export CONAN_SERVER_JWT_SECRET=${CONAN_SERVER_JWT_SECRET:=`dd if=/dev/urandom of=/dev/stdout bs=12 count=1 status=none | base64`}
+export CONAN_SERVER_JWT_EXPERATION_TIME=${CONAN_SERVER_JWT_EXPERATION_TIME:=120}
+
+# server data
+export CONAN_SERVER_SSL_ENABLE=${CONAN_SERVER_SSL_ENABLE:="False"}
+export CONAN_SERVER_PORT=${CONAN_SERVER_PORT:=9300}
+export CONAN_SERVER_PUBLIC_PORT=${CONAN_SERVER_PUBLIC_PORT:=""}
+export CONAN_SERVER_HOST_NAME=${CONAN_SERVER_HOST_NAME:="localhost"}
+
+# authorization
+export CONAN_SERVER_AUTHORIZE_TIMEOUT=${CONAN_SERVER_AUTHORIZE_TIMEOUT:=1800}
+
+# disk storage
+export CONAN_SERVER_DISK_STORAGE_PATH=${CONAN_SERVER_DISK_STORAGE_PATH:="${CONAN_SERVER_HOME}/data"}
+export CONAN_SERVER_DISK_AUTHORIZE_TIMEOUT=${CONAN_SERVER_DISK_AUTHORIZE_TIMEOUT:=1800}
+export CONAN_SERVER_UPDOWN_SECRET=${CONAN_SERVER_UPDOWN_SECRET:=`dd if=/dev/urandom of=/dev/stdout bs=12 count=1 status=none | base64`}
+
+# authorization : (custom_authenticator: ldap_authentication)
+export CONAN_SERVER_LDAP_AUTH=${CONAN_SERVER_LDAP_AUTH:=""}
+export LDAP_HOST=${LDAP_HOST:=""}
+export LDAP_DISTINGUISHED_NAME=${LDAP_DISTINGUISHED_NAME:=""}
+
+# permissions: */*@*/*: *
+export CONAN_SERVER_WRITE_PERMISSIONS=${CONAN_SERVER_WRITE_PERMISSIONS:=""}
+export CONAN_SERVER_READ_PERMISSIONS=${CONAN_SERVER_READ_PERMISSIONS:="*/*@*/*: *"}
+
+# user
+export CONAN_SERVER_ADD_USER=${CONAN_SERVER_ADD_USER:="demo: demo"}
+
+# gunicorn info
+GUNICORN_WORKER=${GUNICORN_WORKER:="4"}
+
+## debugging information 
+
+echo "System mounts:"
+cat /proc/mounts
+echo
+
+echo "I am: `id`"
+echo
+
+echo "And I have secrets:"
+echo "   - jwt_secret: ${CONAN_SERVER_JWT_SECRET}"
+echo "   - updown_secret: $CONAN_SERVER_UPDOWN_SECRET"
+echo
+
+#
+# Making sure the filesystem is as expected
+#
+
+[ ! -d ${CONAN_SERVER_HOME} ] \
+    && echo ${CONAN_SERVER_HOME}
+
+[ ! -d $CONAN_SERVER_DISK_STORAGE_PATH ] \
+    && mkdir -p $CONAN_SERVER_DISK_STORAGE_PATH
+
+ls -l /home || echo no home
+ls -l ${HOME} || echo no jinkies
+ls -l ${HOME}/.conan_server || echo no conan_server
+ls -l /tmp/ || echo no server template
+
+envsubst "$(printf '${%s} ' $(env | sed 's/=.*//'))" < /tmp/server.tmpl > ${CONAN_SERVER_CONFIG_FILE}
+
+if [ ! -z "${CONAN_SERVER_LDAP_AUTH}" ]
+then
+    mkdir -p ${CONAN_SERVER_HOME}/plugins/authenticator/
+    find /usr/local -name ldap_authentication.py -exec cp {} ${CONAN_SERVER_HOME}/plugins/authenticator/ \;
+    ls -l $CONAN_SERVER_HOME/plugins/authenticator/
+    find /usr/local -name ldap_authentication.py
+    envsubst "$(printf '${%s} ' $(env | sed 's/=.*//'))" < /tmp/ldap_authentication.tmpl > ${CONAN_SERVER_HOME}/ldap_authentication.conf
+
+    echo "LDAP config file for conan server:"
+    echo " ---cut-here---"
+    cat ${CONAN_SERVER_HOME}/ldap_authentication.conf
+    echo " ---/cut-here---"
+    echo
+fi
+
+##
+## Show config file
+##
+
+echo "Conan Server config file:"
+echo " ---cut-here---"
+cat ${CONAN_SERVER_CONFIG_FILE}
+echo " ---/cut-here---"
+
+gunicorn -b 0.0.0.0:${CONAN_SERVER_PORT} \
+         -b [::1]:${CONAN_SERVER_PORT} \
+         -w ${GUNICORN_WORKER} \
+         -t ${CONAN_SERVER_AUTHORIZE_TIMEOUT} \
+         conans.server.server_launcher:app

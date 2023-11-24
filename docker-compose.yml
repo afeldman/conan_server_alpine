@@ -1,0 +1,10 @@
+version: '3' 
+
+services:
+  conan:
+    build: .
+    ports:
+      - 9300:9300
+    volumes:
+      - ./data:/home/conan_user/.conan_server/data:z
+      

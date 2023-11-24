@@ -19,7 +19,7 @@ export CONAN_SERVER_HOST_NAME=${CONAN_SERVER_HOST_NAME:="localhost"}
 export CONAN_SERVER_AUTHORIZE_TIMEOUT=${CONAN_SERVER_AUTHORIZE_TIMEOUT:=1800}
 
 # disk storage
-export CONAN_SERVER_DISK_STORAGE_PATH=${CONAN_SERVER_DISK_STORAGE_PATH:="${CONAN_SERVER_HOME}/data"}
+export CONAN_SERVER_DISK_STORAGE_PATH=${CONAN_SERVER_DISK_STORAGE_PATH:="/conan_data/data"}
 export CONAN_SERVER_DISK_AUTHORIZE_TIMEOUT=${CONAN_SERVER_DISK_AUTHORIZE_TIMEOUT:=1800}
 export CONAN_SERVER_UPDOWN_SECRET=${CONAN_SERVER_UPDOWN_SECRET:=`dd if=/dev/urandom of=/dev/stdout bs=12 count=1 status=none | base64`}
 
@@ -57,7 +57,7 @@ echo
 #
 
 [ ! -d ${CONAN_SERVER_HOME} ] \
-    && echo ${CONAN_SERVER_HOME}
+    && mkdir -p ${CONAN_SERVER_HOME}
 
 [ ! -d $CONAN_SERVER_DISK_STORAGE_PATH ] \
     && mkdir -p $CONAN_SERVER_DISK_STORAGE_PATH
@@ -65,17 +65,18 @@ echo
 ls -l /home || echo no home
 ls -l ${HOME} || echo no jinkies
 ls -l ${HOME}/.conan_server || echo no conan_server
-ls -l /tmp/ || echo no server template
 
-envsubst "$(printf '${%s} ' $(env | sed 's/=.*//'))" < /tmp/server.tmpl > ${CONAN_SERVER_CONFIG_FILE}
+variable_list=$(printf '${%s} ' $(env | sed 's/=.*//'))
 
-if [ ! -z "${CONAN_SERVER_LDAP_AUTH}" ]
+envsubst "${variable_list}" < /tmp/server.tmpl > ${CONAN_SERVER_CONFIG_FILE}
+
+if [ ! -z ${CONAN_SERVER_LDAP_AUTH} ]
 then
     mkdir -p ${CONAN_SERVER_HOME}/plugins/authenticator/
     find /usr/local -name ldap_authentication.py -exec cp {} ${CONAN_SERVER_HOME}/plugins/authenticator/ \;
     ls -l $CONAN_SERVER_HOME/plugins/authenticator/
     find /usr/local -name ldap_authentication.py
-    envsubst "$(printf '${%s} ' $(env | sed 's/=.*//'))" < /tmp/ldap_authentication.tmpl > ${CONAN_SERVER_HOME}/ldap_authentication.conf
+    envsubst "${variable_list}" < /tmp/ldap_authentication.tmpl > ${CONAN_SERVER_HOME}/ldap_authentication.conf
 
     echo "LDAP config file for conan server:"
     echo " ---cut-here---"

@@ -3,8 +3,10 @@ version: '3'
 services:
   conan:
     build: .
+    container_name: conan-server
+    privileged: true
     ports:
       - 9300:9300
     volumes:
-      - ./data:/home/conan_user/.conan_server/data:z
+      - ./data:/conan_data/data:z
       
